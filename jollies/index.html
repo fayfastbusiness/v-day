@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Jollies Back Office</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=Noto+Sans+Thai:wght@400;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="shell">
+    <aside class="sidebar" id="sidebar">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true">J</span>
+        <div><div class="brand-name">Jollies</div><div class="brand-sub">Back office</div></div>
+      </div>
+      <nav id="nav" aria-label="Main">
+        <a href="#/dashboard" data-route="dashboard">Dashboard</a>
+        <div class="nav-group">Operations</div>
+        <a href="#/orders" data-route="orders">Orders</a>
+        <a href="#/bake" data-route="bake">Bake &amp; pack</a>
+        <a href="#/inventory" data-route="inventory">Inventory</a>
+        <a href="#/menu" data-route="menu">Menu &amp; recipes</a>
+        <a href="#/tasks" data-route="tasks">Tasks</a>
+        <div class="nav-group">Marketing</div>
+        <a href="#/marketing" data-route="marketing">Performance</a>
+        <a href="#/ads" data-route="ads">Ads tracker</a>
+        <a href="#/posts" data-route="posts">Post tracker</a>
+        <div class="nav-group">Finance</div>
+        <a href="#/finance" data-route="finance">Cash &amp; P&amp;L</a>
+        <a href="#/transactions" data-route="transactions">Transactions</a>
+        <a href="#/budget" data-route="budget">Budget</a>
+        <div class="nav-group">&nbsp;</div>
+        <a href="#/settings" data-route="settings">Settings &amp; backup</a>
+      </nav>
+    </aside>
+    <div class="main">
+      <header class="topbar">
+        <button class="icon-btn menu-toggle" id="menuToggle" aria-label="Open menu">&#9776;</button>
+        <h1 id="pageTitle">Dashboard</h1>
+        <div class="topbar-actions" id="pageActions"></div>
+      </header>
+      <main id="view" tabindex="-1"></main>
+    </div>
+  </div>
+  <dialog id="modal"><form method="dialog" id="modalForm"></form></dialog>
+  <div id="toast" role="status" aria-live="polite"></div>
+  <div id="tip" class="tip" hidden></div>
+  <script src="seed.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
