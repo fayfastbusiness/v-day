@@ -82,10 +82,24 @@
     var t = document.getElementById('toast'); t.textContent = msg; t.classList.add('show');
     clearTimeout(toast._t); toast._t = setTimeout(function () { t.classList.remove('show'); }, 2600);
   }
+  // Shows the export with a Copy button. Download also works when the app is opened as a file.
   function download(name, text, type) {
-    var blob = new Blob([text], { type: type || 'text/plain' });
-    var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name;
-    document.body.appendChild(a); a.click(); setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 500);
+    openModal('Export: ' + name, '<p class="field full small">Copy this and paste it into a file, a Google Sheet (for CSV) or a message to the team. ' +
+      'To restore a backup, save it as a .json file and use Import backup.</p>' +
+      '<textarea class="field full" id="exportText" rows="12" readonly style="font:12px/1.4 ui-monospace,Menlo,monospace">' + esc(text.replace(/^\ufeff/, '')) + '</textarea>' +
+      '<div class="row full" style="grid-column:1/-1"><button type="button" class="btn" id="dlBtn">Download file</button></div>',
+      function () {
+        var ta = document.getElementById('exportText');
+        var done = function () { toast('Copied'); };
+        try { navigator.clipboard.writeText(ta.value).then(done, function () { ta.select(); toast('Press Ctrl/Cmd + C to copy'); }); }
+        catch (e) { ta.select(); toast('Press Ctrl/Cmd + C to copy'); }
+        return false;
+      }, { submit: 'Copy' });
+    document.getElementById('dlBtn').onclick = function () {
+      var blob = new Blob([text], { type: type || 'text/plain' });
+      var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name;
+      document.body.appendChild(a); a.click(); setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 500);
+    };
   }
   function csv(rows) {
     return '﻿' + rows.map(function (r) {
@@ -353,7 +367,10 @@
     modalForm.onsubmit = function (e) { e.preventDefault(); if (onSubmit() !== false) { modal.close(); save(); render(); } };
     modalForm.querySelectorAll('[data-close]').forEach(function (b) { b.onclick = function () { modal.close(); }; });
     var del = modalForm.querySelector('[data-del]');
-    if (del) del.onclick = function () { if (confirm('Delete this record?')) { opt.onDelete(); modal.close(); save(); render(); } };
+    if (del) del.onclick = function () {
+      if (!del.dataset.armed) { del.dataset.armed = '1'; del.textContent = 'Click again to delete'; return; }
+      opt.onDelete(); modal.close(); save(); render(); toast('Deleted');
+    };
     modal.showModal();
     if (opt.onOpen) opt.onOpen();
     var first = modalForm.querySelector('input, select, textarea'); if (first) first.focus();
@@ -704,23 +721,23 @@
       '</div>';
 
     html += '<div class="grid g3">' +
-      '<div class="card"><div class="card-head"><h2>Stock alerts</h2><a href="#/inventory" class="small">Inventory →</a></div>' +
+      '<div class="card"><div class="card-head"><h2>Stock alerts</h2><a href="#inventory" class="small">Inventory →</a></div>' +
       (alerts.length ? '<ul class="list">' + alerts.slice(0, 7).map(function (r) {
         return '<li>' + statusChip(r.status) + '<span class="spacer">' + esc(r.it.name) + '</span><span class="small muted">' + (r.packs ? r.packs + ' pack' + (r.packs > 1 ? 's' : '') + ' by ' + esc(fmtShort(r.orderBy)) : '') + '</span></li>';
       }).join('') + '</ul>' + (alerts.length > 7 ? '<p class="small muted">+' + (alerts.length - 7) + ' more</p>' : '') : '<p class="muted">All tracked stock is above its reorder point.</p>') + '</div>' +
-      '<div class="card"><div class="card-head"><h2>Money</h2><a href="#/finance" class="small">Finance →</a></div><ul class="list">' +
+      '<div class="card"><div class="card-head"><h2>Money</h2><a href="#finance" class="small">Finance →</a></div><ul class="list">' +
       '<li><span class="spacer">Sales this month</span><strong>' + thb(monthSales) + '</strong></li>' +
       '<li><span class="spacer">Spent to date</span><strong>' + thb(spent) + '</strong></li>' +
       '<li><span class="spacer">Budget used</span><span style="width:110px">' + meter(spent, budget) + '</span><span class="small muted">' + pct(budget ? spent / budget : 0, 0) + '</span></li>' +
       '<li><span class="spacer">Unpaid orders (all)</span><strong>' + thb(sum(S.orders.filter(function (o) { return o.payment === 'Unpaid'; }), orderTotal)) + '</strong></li></ul></div>' +
-      '<div class="card"><div class="card-head"><h2>Marketing, last 7 days</h2><a href="#/marketing" class="small">Marketing →</a></div><ul class="list">' +
+      '<div class="card"><div class="card-head"><h2>Marketing, last 7 days</h2><a href="#marketing" class="small">Marketing →</a></div><ul class="list">' +
       '<li><span class="spacer">Ad spend</span><strong>' + thb(adsWeek.spend) + '</strong></li>' +
       '<li><span class="spacer">ROAS</span><strong>' + (isFinite(adsWeek.roas) ? adsWeek.roas.toFixed(2) : '-') + '</strong>' + vsTarget(adsWeek.roas, S.targets.targetRoas) + '</li>' +
       '<li><span class="spacer">Posts</span><strong>' + S.posts.filter(function (p) { return p.date >= last7; }).length + '</strong></li>' +
       '<li><span class="spacer">Orders by channel</span><span class="small muted">' + channelSummary(S.orders.filter(function (o) { return o.createdAt.slice(0, 10) >= last7; })) + '</span></li></ul></div>' +
       '</div>';
 
-    html += '<div class="card"><div class="card-head"><h2>Open tasks</h2><span class="sub">' + open.length + ' of ' + S.tasks.length + ' open</span><a href="#/tasks" class="small">All tasks →</a></div>' +
+    html += '<div class="card"><div class="card-head"><h2>Open tasks</h2><span class="sub">' + open.length + ' of ' + S.tasks.length + ' open</span><a href="#tasks" class="small">All tasks →</a></div>' +
       (open.length ? '<ul class="list">' + open.slice(0, 6).map(taskRow).join('') + '</ul>' : '<p class="muted">Nothing open. Nice.</p>') + '</div>';
     return html;
   } };
@@ -772,7 +789,7 @@
 
   /* Bake & pack */
   VIEWS.bake = { title: 'Bake & pack', render: function () {
-    setActions('<button class="btn" onclick="window.print()">Print</button>');
+    setActions('');
     var ships = uniq(upcomingShipDates(4).concat(S.orders.map(shipDate))).sort();
     var ship = UI.bakeShip || nextShipDate();
     var orders = S.orders.filter(function (o) { return !isVoid(o) && shipDate(o) === ship; });
@@ -916,7 +933,7 @@
         return '<tr><td>' + esc(k) + '</td><td class="num">' + ch[k].n + '</td><td class="num">' + thb(ch[k].rev) + '</td><td style="width:35%"><div class="bar"><i style="width:' + (ch[k].rev / maxRev * 100) + '%"></i></div></td></tr>';
       }), 'No orders in this period.') + '</div></div>';
     var top = posts.slice().sort(function (a, b) { return (engRate(b) || 0) - (engRate(a) || 0); }).slice(0, 5);
-    html += '<div class="card"><div class="card-head"><h2>Top posts by engagement rate</h2><a href="#/posts" class="small">All posts →</a></div>' +
+    html += '<div class="card"><div class="card-head"><h2>Top posts by engagement rate</h2><a href="#posts" class="small">All posts →</a></div>' +
       table(['Date', 'Platform', 'Topic', '#Views 7d', '#Eng. rate', 'Verdict'], top.map(function (p) {
         return '<tr><td>' + esc(fmtShort(p.date)) + '</td><td>' + esc(p.platform) + ' · ' + esc(p.format) + '</td><td>' + esc(p.topic) + '</td><td class="num">' + num(p.views7, 0) + '</td><td class="num">' + pct(engRate(p)) + '</td><td>' + postVerdict(p) + '</td></tr>';
       }), 'No posts logged in this period.') + '</div>';
@@ -990,7 +1007,7 @@
       ].map(function (r) { return '<tr><td>' + r[0] + '</td><td class="num">' + r[1] + '</td></tr>'; })) +
       '<p class="small muted">Ingredient cost is estimated from recipes, so stock bought this month is not double counted. Delivery costs you pay go in Transactions.</p></div>';
     var cats = S.budget.map(function (b) { return { c: b.category, b: b.amount, s: spentBy(b.category) }; });
-    html += '<div class="card"><div class="card-head"><h2>Spending by category</h2><a href="#/budget" class="small">Budget →</a></div>' +
+    html += '<div class="card"><div class="card-head"><h2>Spending by category</h2><a href="#budget" class="small">Budget →</a></div>' +
       table(['Category', '#Spent', '#Budget', ''], cats.map(function (x) {
         return '<tr><td>' + esc(x.c) + '</td><td class="num">' + thb(x.s) + '</td><td class="num">' + thb(x.b) + '</td><td style="width:30%">' + meter(x.s, x.b) + '</td></tr>';
       })) + '</div></div>';
@@ -1029,7 +1046,7 @@
   } };
 
   /* Settings */
-  VIEWS.settings = { title: 'Settings & backup', render: function () {
+  VIEWS.setup = { title: 'Settings & backup', render: function () {
     setActions('');
     var st = S.settings;
     return '<div class="grid g2"><div class="card"><div class="card-head"><h2>Pre-order schedule</h2></div><form id="schedForm" class="grid">' +
@@ -1062,7 +1079,7 @@
   } };
 
   /* ---------- Render & routing ---------- */
-  function route() { var r = (location.hash.replace(/^#\/?/, '') || 'dashboard').split('?')[0]; return VIEWS[r] ? r : 'dashboard'; }
+  function route() { var r = (location.hash.replace(/^#\/?/, '') || 'dashboard').split('?')[0]; if (r === 'settings') r = 'setup'; return VIEWS[r] ? r : 'dashboard'; }
   function render() {
     var r = route(), v = VIEWS[r];
     document.getElementById('pageTitle').textContent = v.title;
@@ -1071,7 +1088,7 @@
     var y = window.scrollY;
     document.getElementById('view').innerHTML = v.render();
     window.scrollTo(0, y);
-    if (r === 'settings') bindSettings();
+    if (r === 'setup') bindSettings();
   }
   function bindSettings() {
     var f = document.getElementById('schedForm');
@@ -1093,9 +1110,10 @@
         try {
           var data = JSON.parse(rd.result);
           if (!data || !data.settings || !Array.isArray(data.orders)) throw new Error('Not a Jollies backup');
-          if (!confirm('Replace all data on this device with the backup from ' + (data.exportedAt || 'file') + '?')) return;
-          S = withDefaults(data); save(); render(); toast('Backup imported');
-        } catch (err) { alert('Could not import: ' + err.message); }
+          openModal('Import backup', '<p class="field full">This replaces all data on this device with the backup from ' + esc(data.exportedAt ? data.exportedAt.slice(0, 16).replace('T', ' ') : 'the file') + ' (' + data.orders.length + ' orders, ' + (data.transactions || []).length + ' transactions).</p>',
+            function () { S = withDefaults(data); toast('Backup imported'); }, { submit: 'Replace my data' });
+        } catch (err) { toast('Could not import: ' + err.message); }
+        e.target.value = '';
       };
       rd.readAsText(file);
     };
@@ -1160,7 +1178,8 @@
         download('jollies-inventory-' + todayISO() + '.csv', csv([['Item', 'Unit', 'Supplier', 'Pack size', 'Pack price', 'On hand', 'Needed', 'Left after', 'Reorder point', 'Status']].concat(
           inventoryView().map(function (r) { return [r.it.name, r.it.unit, r.it.supplier, r.it.packSize, r.it.packPrice, r.onHand.toFixed(2), r.need.toFixed(2), r.left.toFixed(2), r.it.reorderPoint, r.status]; }))), 'text/csv'); break;
       case 'reset':
-        if (confirm('Replace everything on this device with the original Drive data? Orders, logs and edits will be lost.')) { S = clone(window.JOLLIES_SEED); save(); render(); toast('Reset to Drive data'); }
+        if (!t.dataset.armed) { t.dataset.armed = '1'; t.textContent = 'Click again: this erases orders, logs and edits'; break; }
+        S = clone(window.JOLLIES_SEED); save(); render(); toast('Reset to Drive data');
         break;
       case 'theme':
         try { if (t.dataset.v) localStorage.setItem('jollies-theme', t.dataset.v); else localStorage.removeItem('jollies-theme'); } catch (err) { /* ignore */ }

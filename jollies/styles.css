@@ -78,7 +78,7 @@ nav a.active { background: var(--accent-soft); color: var(--accent); }
 .main { min-width: 0; }
 .topbar {
   display: flex; align-items: center; gap: 12px; padding: 16px 28px;
-  border-bottom: 1px solid var(--border); background: var(--bg); position: sticky; top: 0; z-index: 5;
+  border-bottom: 1px solid var(--border); background: var(--bg); position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5;
 }
 .topbar h1 { flex: 1; }
 .topbar-actions { display: flex; gap: 8px; flex-wrap: wrap; }
