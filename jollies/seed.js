@@ -1,11 +1,11 @@
 /* Starting data for the Jollies internal app.
-   Taken from the "Our Bakeshop!" Drive folder on 20 Nov 2026:
+   Taken from the "Our Bakeshop!" Drive folder (visible rows only; hidden rows skipped), 21 Nov 2026:
    [Jollies] Operations (Menu, Recipes, Inventory, Settings),
    [Jollies] Finance (Budget, Transaction - Make), [Jollies] Marketing (Targets),
    [Jollies] Management (Gantt).
    Sample/example rows from those sheets were left out on purpose. */
 window.JOLLIES_SEED = {
-  version: 1,
+  version: 2,
   settings: {
     bizName: 'Jollies',
     launchDate: '2026-12-03',
@@ -16,6 +16,7 @@ window.JOLLIES_SEED = {
     countUnpaid: false,          // only paid orders reserve stock
     autoRecordPayments: true,    // marking an order Paid writes a Sales line in Finance
     salesAccount: 'scb',
+    singlePack: { cost: 5, size: 4 },   // estimated packaging for single pieces: 5 THB per bag of up to 4
     activeShipOverride: '',
     accounts: [
       { id: 'kbank', name: 'KBank (Make) - investment', opening: 40000 },
@@ -27,53 +28,51 @@ window.JOLLIES_SEED = {
     incomeCategories: ['Sales', 'Shipping fee', 'Capital / other income']
   },
 
+  // Visible rows of the Inventory tab. Pack prices are the real prices paid.
   inventory: [
-    { id: 'flour', name: 'แป้งตราว่าว 1 kg', unit: 'g', supplier: 'B-pack', packSize: 1000, packPrice: 34, opening: 1000, reorderPoint: 1000, target: 6000, leadDays: 1 },
-    { id: 'sugar', name: 'Sugar', unit: 'g', supplier: 'B-pack', packSize: 1000, packPrice: 37, opening: 1000, reorderPoint: 1000, target: 5000, leadDays: 1 },
     { id: 'butter', name: 'เนย Allowrie', unit: 'g', supplier: 'B-pack', packSize: 1000, packPrice: 190, opening: 1000, reorderPoint: 1000, target: 4000, leadDays: 1 },
-    { id: 'vanilla', name: 'Vanilla extract', unit: 'ml', supplier: 'Makro', packSize: 473, packPrice: 113, opening: 473, reorderPoint: 200, target: 1000, leadDays: 2 },
-    { id: 'chia', name: 'Chia seed', unit: 'g', supplier: 'Lemon Farm', packSize: 225, packPrice: 249, opening: 225, reorderPoint: 0, target: 0, leadDays: 2 },
-    { id: 'macadamia', name: 'Macadamia', unit: 'g', supplier: 'Local market', packSize: 1000, packPrice: 880, opening: 1000, reorderPoint: 250, target: 1000, leadDays: 2 },
-    { id: 'lavender', name: 'Lavender', unit: 'g', supplier: 'Local market', packSize: 60, packPrice: 99, opening: 0, reorderPoint: 0, target: 0, leadDays: 2 },
-    { id: 'sesame', name: 'งาดำ', unit: 'g', supplier: 'Makro', packSize: 500, packPrice: 72, opening: 0, reorderPoint: 6, target: 30, leadDays: 1 },
-    { id: 'strawberry', name: 'ผงสตอเบอรี่', unit: 'g', supplier: 'Local market', packSize: 25, packPrice: 55, opening: 100, reorderPoint: 20, target: 100, leadDays: 3 },
-    { id: 'horlick', name: 'Horlick', unit: 'g', supplier: 'Local market', packSize: 400, packPrice: 380, opening: 400, reorderPoint: 30, target: 200, leadDays: 3 },
-    { id: 'matcha', name: 'Matcha', unit: 'g', supplier: 'Supermarket', packSize: 40, packPrice: 166, opening: 40, reorderPoint: 30, target: 200, leadDays: 3 },
+    { id: 'lemonzest', name: 'ผิวเลม่อน', unit: 'g', supplier: '', packSize: 6, packPrice: 40, opening: 0, reorderPoint: 0, target: 0, leadDays: 1 },
+    { id: 'egg', name: 'ไข่', unit: 'g', supplier: '', packSize: 100, packPrice: 10.5, opening: 0, reorderPoint: 0, target: 0, leadDays: 1 },
+    { id: 'sugar', name: 'น้ำตาล', unit: 'g', supplier: '', packSize: 1000, packPrice: 40, opening: 0, reorderPoint: 0, target: 0, leadDays: 1 },
+    { id: 'honey', name: 'น้ำผึ้ง', unit: 'ml', supplier: '', packSize: 1000, packPrice: 199, opening: 0, reorderPoint: 0, target: 0, leadDays: 1 },
+    { id: 'realbutter', name: 'เนยแท้', unit: 'g', supplier: '', packSize: 1000, packPrice: 400, opening: 0, reorderPoint: 0, target: 0, leadDays: 1 },
+    { id: 'milk', name: 'นมสด', unit: 'ml', supplier: '', packSize: 450, packPrice: 28, opening: 0, reorderPoint: 0, target: 0, leadDays: 1 },
+    { id: 'cakeflour', name: 'แป้งเค้ก', unit: 'g', supplier: '', packSize: 1000, packPrice: 47, opening: 0, reorderPoint: 0, target: 0, leadDays: 1 },
+    { id: 'bakingpowder', name: 'ผงฟู', unit: 'g', supplier: '', packSize: 100, packPrice: 35, opening: 0, reorderPoint: 0, target: 0, leadDays: 1 },
+    { id: 'salt', name: 'เกลือ', unit: 'g', supplier: '', packSize: 0, packPrice: 0, opening: 0, reorderPoint: 0, target: 0, leadDays: 1 },
+    { id: 'icing', name: 'ไอซิ่ง', unit: 'g', supplier: '', packSize: 1000, packPrice: 44, opening: 0, reorderPoint: 0, target: 0, leadDays: 1 },
+    { id: 'horlick', name: 'Horlick', unit: 'g', supplier: '', packSize: 270, packPrice: 269, opening: 0, reorderPoint: 0, target: 0, leadDays: 1 },
+    { id: 'hojicha', name: 'Hojicha', unit: 'g', supplier: '', packSize: 40, packPrice: 95, opening: 0, reorderPoint: 0, target: 0, leadDays: 1 },
     { id: 'cookieflour', name: 'แป้งคุกกี้', unit: 'g', supplier: 'Shopee', packSize: 1000, packPrice: 80, opening: 1000, reorderPoint: 30, target: 200, leadDays: 3 },
-    { id: 'eggs', name: 'Eggs', unit: 'pcs', supplier: 'Local market', packSize: 1, packPrice: 5, opening: 60, reorderPoint: 30, target: 120, leadDays: 1 },
     { id: 'box', name: 'Packaging box', unit: 'pcs', supplier: 'Shopee', packSize: 60, packPrice: 1152, opening: 60, reorderPoint: 30, target: 200, leadDays: 3 },
     { id: 'postbox', name: 'กล่องไปรษณีย์', unit: 'pcs', supplier: 'Shopee', packSize: 20, packPrice: 109, opening: 20, reorderPoint: 30, target: 200, leadDays: 3 },
     { id: 'sticker', name: 'สติ๊กเกอร์ใส', unit: 'pcs', supplier: 'Shopee', packSize: 1440, packPrice: 49, opening: 1440, reorderPoint: 30, target: 200, leadDays: 3 },
-    { id: 'clearbag', name: 'ซองใส', unit: 'pcs', supplier: '', packSize: 0, packPrice: 0, opening: 0, reorderPoint: 0, target: 0, leadDays: 3 },
-    { id: 'paperbag', name: 'ถุงกระดาษ', unit: 'pcs', supplier: '', packSize: 100, packPrice: 496, opening: 100, reorderPoint: 0, target: 0, leadDays: 3 },
-    { id: 'cookiebag', name: 'ซองน้ำตาลคุกกี้', unit: 'pcs', supplier: '', packSize: 0, packPrice: 0, opening: 0, reorderPoint: 0, target: 0, leadDays: 3 },
-    { id: 'card', name: 'การ์ด', unit: 'pcs', supplier: '', packSize: 0, packPrice: 0, opening: 0, reorderPoint: 0, target: 0, leadDays: 3 },
-    { id: 'label', name: 'Sticker label', unit: 'pcs', supplier: '', packSize: 0, packPrice: 0, opening: 0, reorderPoint: 0, target: 0, leadDays: 3 },
-    { id: 'parchment', name: 'กระดาษไข', unit: 'pcs', supplier: '', packSize: 0, packPrice: 0, opening: 0, reorderPoint: 0, target: 0, leadDays: 3 },
-    { id: 'eyelet', name: 'ตาไก่', unit: 'pcs', supplier: 'Local market', packSize: 0, packPrice: 0, opening: 0, reorderPoint: 0, target: 0, leadDays: 1 }
+    { id: 'clearbag', name: 'ซองใส', unit: 'pcs', supplier: '', packSize: 0, packPrice: 0, opening: 0, reorderPoint: 30, target: 200, leadDays: 3 },
+    { id: 'paperbag', name: 'ถุงกระดาษ', unit: 'pcs', supplier: 'Shopee', packSize: 100, packPrice: 500, opening: 0, reorderPoint: 0, target: 0, leadDays: 3 },
+    { id: 'cookiebag', name: 'ซองขาวคุกกี้', unit: 'pcs', supplier: 'Shopee', packSize: 0, packPrice: 0, opening: 0, reorderPoint: 0, target: 0, leadDays: 3 },
+    { id: 'card', name: 'การ์ด', unit: 'pcs', supplier: 'Tip', packSize: 1, packPrice: 2.25, opening: 0, reorderPoint: 30, target: 200, leadDays: 3 },
+    { id: 'logo', name: 'Sticker logo', unit: 'pcs', supplier: 'Tip', packSize: 1, packPrice: 2, opening: 0, reorderPoint: 0, target: 0, leadDays: 3 },
+    { id: 'label', name: 'Sticker label', unit: 'pcs', supplier: 'Tip', packSize: 1, packPrice: 1, opening: 0, reorderPoint: 30, target: 200, leadDays: 3 },
+    { id: 'parchmentcard', name: 'การ์ดกระดาษไข', unit: 'pcs', supplier: 'Tip', packSize: 1, packPrice: 1, opening: 0, reorderPoint: 30, target: 200, leadDays: 3 },
+    { id: 'eyelet', name: 'ตาไก่', unit: 'pcs', supplier: 'Local market', packSize: 100, packPrice: 35, opening: 0, reorderPoint: 0, target: 0, leadDays: 1 },
+    { id: 'wrap', name: 'กระดาษห่อขาว', unit: 'pcs', supplier: 'Local market', packSize: 800, packPrice: 650, opening: 0, reorderPoint: 0, target: 0, leadDays: 1 }
   ],
 
-  // kind: 'single' = one piece you bake; 'box' = a set made of pieces chosen from a category pool.
+  // estCost = estimated ingredient cost per piece (used for margins and P&L).
+  // recipe = real raw materials per unit, used for stock tracking and the real-cost comparison.
+  // A giftset's packCost is its estimated packaging; single pieces share bags (settings.singlePack).
   products: [
-    { id: 'sb-matcha', name: 'Snowball Matcha (1 pc)', category: 'Snowball', kind: 'single', price: 39, shelfLife: 5, maxPerBatch: 40, active: true,
-      recipe: [['flour', 4.912], ['butter', 3.965], ['vanilla', 0.175], ['sugar', 1.316], ['chia', 0.439], ['macadamia', 4.5], ['matcha', 0.526]] },
-    { id: 'sb-straw', name: 'Snowball Strawberry (1 pc)', category: 'Snowball', kind: 'single', price: 39, shelfLife: 5, maxPerBatch: 40, active: true,
-      recipe: [['flour', 4.912], ['butter', 3.965], ['vanilla', 0.175], ['sugar', 1.316], ['chia', 0.439], ['macadamia', 4.5], ['strawberry', 1.754]] },
-    { id: 'sb-sesame', name: 'Snowball Sesame (1 pc)', category: 'Snowball', kind: 'single', price: 39, shelfLife: 5, maxPerBatch: 40, active: true,
-      recipe: [['flour', 4.912], ['butter', 3.965], ['vanilla', 0.175], ['sugar', 1.316], ['chia', 0.439], ['macadamia', 4.5], ['sesame', 0.175]] },
-    { id: 'sb-horlick', name: 'Snowball Horlick (1 pc)', category: 'Snowball', kind: 'single', price: 39, shelfLife: 5, maxPerBatch: 40, active: true,
-      recipe: [['flour', 4.912], ['butter', 3.965], ['vanilla', 0.175], ['sugar', 1.316], ['chia', 0.439], ['macadamia', 4.5], ['horlick', 7.018]] },
-    { id: 'sb-lavender', name: 'Snowball Lavender (1 pc)', category: 'Snowball', kind: 'single', price: 39, shelfLife: 5, maxPerBatch: 40, active: true,
-      recipe: [['flour', 4.912], ['butter', 3.965], ['vanilla', 0.175], ['sugar', 1.316], ['chia', 0.439], ['macadamia', 4.5], ['lavender', 0.132]] },
-    { id: 'cookie', name: 'Cookie (1 pc)', category: 'Cookie', kind: 'single', price: 39, shelfLife: 5, maxPerBatch: 40, active: true,
-      recipe: [['cookieflour', 6.667], ['eggs', 0.013], ['butter', 2.667]] },
-    { id: 'box-snowball', name: 'Boxset (6 snowballs + 2 cookies)', category: 'Boxset', kind: 'box', price: 240, shelfLife: 5, maxPerBatch: 40, active: true,
-      recipe: [['postbox', 1], ['box', 1], ['sticker', 2]],
-      box: { pieces: 6, pool: 'Snowball', extras: [['cookie', 2]] } },
-    { id: 'box-madeleine', name: 'Boxset (6 madeleines + 2 cookies)', category: 'Boxset', kind: 'box', price: 299, shelfLife: 5, maxPerBatch: 40, active: false,
-      notes: 'Earlier menu. No madeleine recipes yet.', recipe: [], box: { pieces: 6, pool: 'Madeleine', extras: [['cookie', 2]] } },
-    { id: 'madeleine', name: 'Madeleine (1 pc)', category: 'Madeleine', kind: 'single', price: 49, shelfLife: 5, maxPerBatch: 40, active: false,
-      notes: 'Earlier menu. Add a recipe before selling.', recipe: [] }
+    { id: 'md-lemon', name: 'Madeleine Lemon (1 pc)', category: 'Madeleine', kind: 'single', price: 49, estCost: 5, shelfLife: 5, maxPerBatch: 40, active: true,
+      recipe: [['lemonzest', 0.188]] },
+    { id: 'md-jollies', name: 'Madeleine Jollies (1 pc)', category: 'Madeleine', kind: 'single', price: 49, estCost: 5, shelfLife: 5, maxPerBatch: 40, active: true, recipe: [] },
+    { id: 'md-straw', name: 'Madeleine Strawberry (1 pc)', category: 'Madeleine', kind: 'single', price: 49, estCost: 5, shelfLife: 5, maxPerBatch: 40, active: true, recipe: [] },
+    { id: 'md-earlgrey', name: 'Madeleine Earl Grey (1 pc)', category: 'Madeleine', kind: 'single', price: 49, estCost: 5, shelfLife: 5, maxPerBatch: 40, active: true, recipe: [] },
+    { id: 'cookie', name: 'Cookie (1 pc)', category: 'Cookie', kind: 'single', price: 39, estCost: 2, shelfLife: 5, maxPerBatch: 40, active: true,
+      notes: 'Egg is 0.667 g per cookie (2 eggs ≈ 100 g per 150 cookies).',
+      recipe: [['cookieflour', 6.667], ['egg', 0.667], ['butter', 2.667]] },
+    { id: 'giftset', name: 'Giftset (6 madeleines + 2 cookies)', category: 'Giftset', kind: 'box', price: 299, packCost: 40, shelfLife: 5, maxPerBatch: 40, active: true,
+      recipe: [['box', 1], ['postbox', 1], ['sticker', 2]],
+      box: { pieces: 6, pool: 'Madeleine', extras: [['cookie', 2]] } }
   ],
 
   orders: [],

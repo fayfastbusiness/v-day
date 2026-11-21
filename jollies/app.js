@@ -5,6 +5,7 @@
   'use strict';
 
   var STORE_KEY = 'jollies-backoffice-v1';
+  var MIGRATED = false;
   var PAYMENT = ['Unpaid', 'Paid', 'Refunded', 'Cancelled'];
   var PRODUCTION = ['Pending', 'Baked', 'Packed', 'Shipped'];
   var STOCK_TYPES = ['Received', 'Waste', 'Correction'];
@@ -22,6 +23,12 @@
   }
   function withDefaults(s) {
     var seed = clone(window.JOLLIES_SEED);
+    // v2: menu changed to madeleines, cookies and giftsets with estimated costs.
+    if ((s.version || 1) < 2) {
+      s.products = seed.products; s.inventory = seed.inventory; s.version = seed.version;
+      s.settings.singlePack = seed.settings.singlePack;
+      MIGRATED = true;
+    }
     Object.keys(seed).forEach(function (k) { if (s[k] === undefined) s[k] = seed[k]; });
     Object.keys(seed.settings).forEach(function (k) { if (s.settings[k] === undefined) s.settings[k] = seed.settings[k]; });
     return s;
@@ -157,18 +164,40 @@
   function unitCost(it) { return it && n(it.packSize) > 0 ? n(it.packPrice) / n(it.packSize) : 0; }
   function recipeCost(recipe) { return sum(recipe || [], function (r) { return unitCost(item(r[0])) * n(r[1]); }); }
   function poolProducts(cat) { return S.products.filter(function (p) { return p.kind === 'single' && p.category === cat && p.active; }); }
-  function productCost(p) {
+  function hasEst(v) { return v !== '' && v != null && isFinite(parseFloat(v)); }
+  function singlePack() { var sp = S.settings.singlePack || {}; return { cost: n(sp.cost), size: Math.max(1, n(sp.size) || 1) }; }
+  // Estimated ingredient cost of one unit (pieces only for a box, no packaging).
+  function ingredientCost(p) {
+    if (!p) return 0;
+    if (p.kind === 'box' && p.box) {
+      var pool = poolProducts(p.box.pool), c = 0;
+      if (pool.length) c += n(p.box.pieces) * sum(pool, ingredientCost) / pool.length;
+      (p.box.extras || []).forEach(function (e) { c += ingredientCost(product(e[0])) * n(e[1]); });
+      return c;
+    }
+    return hasEst(p.estCost) ? n(p.estCost) : recipeCost(p.recipe);
+  }
+  // Estimated packaging per unit: the box cost, or a share of a single-piece bag (min..max).
+  function packagingCost(p, full) {
+    if (!p) return 0;
+    if (p.kind === 'box') return hasEst(p.packCost) ? n(p.packCost) : recipeCost(p.recipe);
+    var sp = singlePack(); return full ? sp.cost / sp.size : sp.cost;
+  }
+  // Estimated total cost per unit sold; singles are costed in a full bag unless `alone`.
+  function productCost(p, alone) { return ingredientCost(p) + packagingCost(p, !alone); }
+  // Real cost from recipes and actual pack prices in Inventory.
+  function realCost(p) {
     if (!p) return 0;
     var c = recipeCost(p.recipe);
     if (p.kind === 'box' && p.box) {
       var pool = poolProducts(p.box.pool);
-      if (pool.length) c += n(p.box.pieces) * sum(pool, productCost) / pool.length;
-      (p.box.extras || []).forEach(function (e) { c += productCost(product(e[0])) * n(e[1]); });
+      if (pool.length) c += n(p.box.pieces) * sum(pool, realCost) / pool.length;
+      (p.box.extras || []).forEach(function (e) { c += realCost(product(e[0])) * n(e[1]); });
     }
     return c;
   }
   function hasRecipe(p) {
-    if (p.kind === 'box') return poolProducts(p.box && p.box.pool).length > 0;
+    if (p.kind === 'box') return poolProducts(p.box && p.box.pool).every(function (x) { return (x.recipe || []).length; });
     return (p.recipe || []).length > 0;
   }
 
@@ -205,9 +234,16 @@
     o.lines.forEach(function (l) { var p = product(l.productId); if (p && p.kind === 'box') addRecipe(p.recipe, n(l.qty)); });
     return out;
   }
+  // Estimated cost: piece estimates + giftset packaging + single-piece bags.
   function orderCost(o) {
-    var ing = orderIngredients(o);
-    return sum(Object.keys(ing), function (k) { return unitCost(item(k)) * ing[k]; });
+    var pieces = orderPieces(o), c = 0, singles = 0;
+    Object.keys(pieces).forEach(function (pid) { c += ingredientCost(product(pid)) * pieces[pid]; });
+    o.lines.forEach(function (l) {
+      var p = product(l.productId); if (!p) return;
+      if (p.kind === 'box') c += packagingCost(p) * n(l.qty); else singles += n(l.qty);
+    });
+    var sp = singlePack();
+    return c + Math.ceil(singles / sp.size) * sp.cost;
   }
   function orderItemsText(o) {
     return o.lines.map(function (l) {
@@ -217,7 +253,7 @@
       return s + (mix.length ? ' (' + mix.join(', ') + ')' : '');
     }).join('; ');
   }
-  function shortName(name) { return name.replace(/\s*\(1 pc\)/i, '').replace(/^Snowball\s+/i, ''); }
+  function shortName(name) { return name.replace(/\s*\(1 pc\)/i, '').replace(/^(Snowball|Madeleine)\s+/i, ''); }
   function nextOrderId(ship) {
     var d = parseDate(ship) || new Date(), prefix = pad(d.getDate()) + pad(d.getMonth() + 1) + '-';
     var max = 0;
@@ -543,14 +579,17 @@
   /* ---------- Product form ---------- */
   function productForm(p) {
     var isNew = !p;
-    var d = p ? clone(p) : { name: '', category: 'Snowball', kind: 'single', price: 39, shelfLife: 5, maxPerBatch: 40, active: true, recipe: [], box: { pieces: 6, pool: 'Snowball', extras: [] }, notes: '' };
-    if (!d.box) d.box = { pieces: 6, pool: 'Snowball', extras: [] };
-    var cats = uniq(S.products.map(function (x) { return x.category; }).concat(['Snowball', 'Cookie', 'Boxset']));
+    var d = p ? clone(p) : { name: '', category: 'Madeleine', kind: 'single', price: 49, estCost: 5, packCost: 40, shelfLife: 5, maxPerBatch: 40, active: true, recipe: [], box: { pieces: 6, pool: 'Madeleine', extras: [] }, notes: '' };
+    if (!d.box) d.box = { pieces: 6, pool: 'Madeleine', extras: [] };
+    var cats = uniq(S.products.map(function (x) { return x.category; }).concat(['Madeleine', 'Cookie', 'Giftset']));
     var F = [
       { k: 'name', l: 'Product name', req: 1, full: 1 },
       { k: 'category', l: 'Category', list: function () { return cats; } },
-      { k: 'kind', l: 'Type', t: 'select', o: [{ v: 'single', l: 'Single piece (baked)' }, { v: 'box', l: 'Boxset (choose pieces)' }] },
-      { k: 'price', l: 'Price (THB)', t: 'number', req: 1 }, { k: 'shelfLife', l: 'Shelf life (days)', t: 'number' },
+      { k: 'kind', l: 'Type', t: 'select', o: [{ v: 'single', l: 'Single piece (baked)' }, { v: 'box', l: 'Giftset / box (choose pieces)' }] },
+      { k: 'price', l: 'Price (THB)', t: 'number', req: 1 },
+      { k: 'estCost', l: 'Estimated ingredient cost per piece (THB)', t: 'number', hint: 'blank = use real recipe cost' },
+      { k: 'packCost', l: 'Estimated packaging per box (THB)', t: 'number' },
+      { k: 'shelfLife', l: 'Shelf life (days)', t: 'number' },
       { k: 'maxPerBatch', l: 'Max units per batch', t: 'number' }, { k: 'active', l: 'On the menu', t: 'checkbox' },
       { k: 'notes', l: 'Notes', full: 1 }
     ];
@@ -572,10 +611,14 @@
     }
     function calcHTML() {
       var tmp = Object.assign({}, d, { price: n(modalForm.elements.price.value), kind: modalForm.elements.kind.value });
-      var c = productCost(tmp), price = tmp.price;
-      return 'Ingredient + packaging cost <strong>' + thb(c, 2) + '</strong> · Profit per unit <strong>' + thb(price - c, 2) + '</strong> · Margin <strong>' + pct(price ? (price - c) / price : NaN) + '</strong>' +
-        (tmp.kind === 'box' ? '<br><span class="small">Box cost uses the average cost of active ' + esc(d.box.pool) + ' pieces.</span>' : '') +
-        '<br><span class="small">Excludes labour, gas/electricity and delivery.</span>';
+      tmp.estCost = modalForm.elements.estCost.value; tmp.packCost = modalForm.elements.packCost.value;
+      var price = tmp.price, c = productCost(tmp), sp = singlePack();
+      var line = 'Estimated cost <strong>' + thb(c, 2) + '</strong> (ingredients ' + thb(ingredientCost(tmp), 2) + ' + packaging ' + thb(packagingCost(tmp, true), 2) + ') · Profit <strong>' + thb(price - c, 2) + '</strong> · Margin <strong>' + pct(price ? (price - c) / price : NaN) + '</strong>';
+      if (tmp.kind !== 'box') {
+        var c1 = productCost(tmp, true);
+        line += '<br><span class="small">Single pieces share a ' + thb(sp.cost) + ' bag of up to ' + sp.size + '. Margin shown for a full bag; a 1-piece order costs ' + thb(c1, 2) + ' (' + pct(price ? (price - c1) / price : NaN) + ').</span>';
+      } else line += '<br><span class="small">Pieces are costed at the average estimate of active ' + esc(d.box.pool) + ' products.</span>';
+      return line + '<br><span class="small">Real cost from recipe and inventory prices: ' + (hasRecipe(tmp) ? thb(realCost(tmp), 2) : 'recipe incomplete') + '. Excludes labour, gas/electricity and delivery.</span>';
     }
     var body = F.map(function (f) { return fieldHTML(f, d[f.k]); }).join('') +
       '<datalist id="dl_cat">' + cats.map(function (c) { return '<option value="' + esc(c) + '">'; }).join('') + '</datalist>' +
@@ -602,12 +645,14 @@
         function sync() {
           var box = modalForm.elements.kind.value === 'box';
           bWrap.hidden = !box;
-          document.getElementById('recipeTitle').textContent = box ? 'Packaging per box' : 'Recipe: ingredients and packaging per 1 unit sold';
+          modalForm.elements.packCost.closest('.field').hidden = !box;
+          modalForm.elements.estCost.closest('.field').hidden = box;
+          document.getElementById('recipeTitle').textContent = box ? 'Real packaging used per box (for stock tracking)' : 'Real raw materials per piece (for stock tracking)';
           calc.innerHTML = calcHTML();
         }
         sync();
         modalForm.elements.kind.addEventListener('change', sync);
-        modalForm.elements.price.addEventListener('input', sync);
+        ['price', 'estCost', 'packCost'].forEach(function (k) { modalForm.elements[k].addEventListener('input', sync); });
         rEl.addEventListener('input', function (e) {
           var t = e.target;
           if (t.dataset.ri) d.recipe[+t.dataset.ri][0] = t.value;
@@ -863,16 +908,23 @@
   VIEWS.menu = { title: 'Menu & recipes', render: function () {
     setActions('<button class="btn primary" data-act="new-product">+ Product</button>');
     var rows = S.products.slice().sort(function (a, b) { return (b.active - a.active) || (a.category > b.category ? 1 : a.category < b.category ? -1 : 0); });
-    var html = '<div class="card"><div class="card-head"><h2>Products</h2><span class="sub">Cost = ingredients + packaging from recipes × current inventory prices</span></div>' +
-      table(['Product', 'Category', '#Price', '#Cost', '#Profit / unit', '#Margin', '#Max / batch', 'Status'], rows.map(function (p) {
-        var c = productCost(p), m = p.price ? (p.price - c) / p.price : NaN;
-        return '<tr data-act="edit-product" data-id="' + p.id + '" style="cursor:pointer"><td>' + esc(p.name) + (p.notes ? '<div class="sub">' + esc(p.notes) + '</div>' : '') + '</td><td>' + esc(p.category) + '</td>' +
-          '<td class="num">' + thb(p.price) + '</td><td class="num">' + thb(c, 2) + '</td><td class="num">' + thb(p.price - c, 2) + '</td><td class="num">' + pct(m) + '</td>' +
-          '<td class="num">' + (p.maxPerBatch || '-') + '</td><td>' + (p.active ? (hasRecipe(p) ? chip('On menu', 'good') : chip('⚠ No recipe', 'warn')) : chip('Off menu', 'neutral')) + '</td></tr>';
-      })) + '<p class="small muted">Costs exclude labour, gas/electricity, delivery and payment fees: add those before judging margin.</p></div>';
-    var active = S.products.filter(function (p) { return p.active && p.kind === 'single' && p.recipe.length; });
-    html += '<div class="card"><div class="card-head"><h2>Recipe cost breakdown</h2><span class="sub">Per 1 piece</span></div><div class="grid g3">' + active.map(function (p) {
-      return '<div><h3 style="margin-bottom:6px">' + esc(p.name) + ' · ' + thb(productCost(p), 2) + '</h3><table>' + p.recipe.map(function (r) {
+    var sp = singlePack();
+    var html = '<div class="card"><div class="card-head"><h2>Products</h2><span class="sub">Margins use your estimated costs · click a row to edit</span></div>' +
+      table(['Product', '#Price', '#Est. ingredients', '#Est. packaging', '#Est. total', '#Profit', '#Margin', '#Real recipe cost', 'Status'], rows.map(function (p) {
+        var c = productCost(p), m = p.price ? (p.price - c) / p.price : NaN, single = p.kind !== 'box';
+        var c1 = productCost(p, true), m1 = p.price ? (p.price - c1) / p.price : NaN;
+        return '<tr data-act="edit-product" data-id="' + p.id + '" style="cursor:pointer"><td>' + esc(p.name) + '<div class="sub">' + esc(p.category) + (p.notes ? ' · ' + esc(p.notes) : '') + '</div></td>' +
+          '<td class="num">' + thb(p.price) + '</td><td class="num">' + thb(ingredientCost(p), 2) + '</td>' +
+          '<td class="num">' + thb(packagingCost(p, true), 2) + (single ? '<div class="sub">' + thb(sp.cost) + ' / bag of ' + sp.size + '</div>' : '') + '</td>' +
+          '<td class="num">' + thb(c, 2) + '</td><td class="num">' + thb(p.price - c, 2) + '</td>' +
+          '<td class="num">' + pct(m) + (single ? '<div class="sub">1 pc alone ' + pct(m1) + '</div>' : '') + '</td>' +
+          '<td class="num">' + (hasRecipe(p) ? thb(realCost(p), 2) : '<span class="sub">incomplete</span>') + '</td>' +
+          '<td>' + (p.active ? (hasRecipe(p) ? chip('On menu', 'good') : chip('On menu · add recipe', 'warn')) : chip('Off menu', 'neutral')) + '</td></tr>';
+      })) + '<p class="small muted">Estimated costs drive margins, order costs and the P&amp;L. The real recipe cost uses actual pack prices from Inventory, and recipes are what take raw materials out of stock. ' +
+      'Single pieces are shown in a full bag of ' + sp.size + '; change the bag cost in Settings. Costs exclude labour, gas/electricity, delivery and payment fees.</p></div>';
+    var active = S.products.filter(function (p) { return p.active && p.recipe.length; });
+    html += '<div class="card"><div class="card-head"><h2>Real raw materials</h2><span class="sub">Per unit, at actual inventory prices</span></div><div class="grid g3">' + active.map(function (p) {
+      return '<div><h3 style="margin-bottom:6px">' + esc(p.name) + ' · ' + thb(recipeCost(p.recipe), 2) + '</h3><table>' + p.recipe.map(function (r) {
         var it = item(r[0]) || { name: r[0], unit: '' };
         return '<tr><td class="small">' + esc(it.name) + '</td><td class="num small">' + num(r[1], 3) + ' ' + esc(it.unit) + '</td><td class="num small">' + thb(unitCost(it) * r[1], 2) + '</td></tr>';
       }).join('') + '</table></div>';
@@ -947,7 +999,7 @@
       stat('Target CTR', pct(T.ctr, 1)) + stat('Target engagement', pct(T.engagement, 1), 'Watch band ±' + pct(T.watchBand, 0)) + '</div></div>';
   }
   function blendedMargin() {
-    var ps = S.products.filter(function (p) { return p.active && hasRecipe(p) && p.price; });
+    var ps = S.products.filter(function (p) { return p.active && p.price; });
     if (!ps.length) return NaN;
     return sum(ps, function (p) { return (p.price - productCost(p)) / p.price; }) / ps.length;
   }
@@ -999,13 +1051,13 @@
       table(['', '#THB'], [
         ['Product sales (paid orders shipping this month)', thb(rev)],
         ['Delivery fees charged', thb(deliv)],
-        ['− Ingredient &amp; packaging cost (from recipes)', '(' + thb(cogs) + ')'],
+        ['− Ingredient &amp; packaging cost (estimated)', '(' + thb(cogs) + ')'],
         ['<strong>Gross profit</strong>', '<strong>' + thb(gp + deliv) + '</strong>'],
         ['Gross margin on products', pct(rev ? gp / rev : NaN)],
         ['− Other spending this month (not ingredients / packaging)', '(' + thb(opex) + ')'],
         ['<strong>Operating result</strong>', '<strong>' + thb(gp + deliv - opex) + '</strong>']
       ].map(function (r) { return '<tr><td>' + r[0] + '</td><td class="num">' + r[1] + '</td></tr>'; })) +
-      '<p class="small muted">Ingredient cost is estimated from recipes, so stock bought this month is not double counted. Delivery costs you pay go in Transactions.</p></div>';
+      '<p class="small muted">Product cost uses your estimates (per piece, giftset packaging and single-piece bags), so stock bought this month is not double counted. Delivery costs you pay go in Transactions.</p></div>';
     var cats = S.budget.map(function (b) { return { c: b.category, b: b.amount, s: spentBy(b.category) }; });
     html += '<div class="card"><div class="card-head"><h2>Spending by category</h2><a href="#budget" class="small">Budget →</a></div>' +
       table(['Category', '#Spent', '#Budget', ''], cats.map(function (x) {
@@ -1058,6 +1110,8 @@
       '<label class="field"><span>Courier pickup time</span><input type="time" name="shipTime" value="' + esc(st.shipTime) + '"></label>' +
       '<label class="field"><span>First ship date (launch)</span><input type="date" name="launchDate" value="' + esc(st.launchDate) + '"></label>' +
       '<label class="field"><span>Active batch override</span><input type="date" name="activeShipOverride" value="' + esc(st.activeShipOverride) + '"></label>' +
+      '<label class="field"><span>Single-piece bag cost (THB)</span><input type="number" step="any" name="spCost" value="' + esc(singlePack().cost) + '"></label>' +
+      '<label class="field"><span>Pieces per bag (up to)</span><input type="number" min="1" name="spSize" value="' + esc(singlePack().size) + '"></label>' +
       '<label class="field"><span>Payments go to</span><select name="salesAccount">' + opts(st.accounts.map(function (a) { return { v: a.id, l: a.name }; }), st.salesAccount) + '</select></label></div>' +
       '<label class="field check"><input type="checkbox" name="countUnpaid"' + (st.countUnpaid ? ' checked' : '') + '><span>Reserve stock for unpaid orders too</span></label>' +
       '<label class="field check"><input type="checkbox" name="autoRecordPayments"' + (st.autoRecordPayments ? ' checked' : '') + '><span>Write a Sales transaction when an order is marked Paid</span></label>' +
@@ -1072,7 +1126,7 @@
       '<p class="small">Everything is saved in <strong>this browser</strong> only. To move data to another device, or hand today’s numbers to a teammate, export a backup file and import it there. Importing replaces the data on that device.</p>' +
       '<div class="row"><button class="btn primary" data-act="export-json">Export backup (.json)</button><label class="btn">Import backup<input type="file" accept="application/json,.json" id="importFile" hidden></label></div>' +
       '<p class="small muted" style="margin-top:16px">Exports for spreadsheets:</p><div class="row"><button class="btn" data-act="export-orders">Orders CSV</button><button class="btn" data-act="export-tx">Transactions CSV</button><button class="btn" data-act="export-inv">Inventory CSV</button></div>' +
-      '<p class="small muted" style="margin-top:16px">Start over from the data in the “Our Bakeshop!” Drive folder (20 Nov 2026). Export a backup first.</p>' +
+      '<p class="small muted" style="margin-top:16px">Start over from the data in the “Our Bakeshop!” Drive folder (21 Nov 2026). Export a backup first.</p>' +
       '<button class="btn danger" data-act="reset">Reset to Drive data</button>' +
       '<p class="small muted" style="margin-top:16px">Theme</p><div class="row"><button class="btn sm" data-act="theme" data-v="">Auto</button><button class="btn sm" data-act="theme" data-v="light">Light</button><button class="btn sm" data-act="theme" data-v="dark">Dark</button></div>' +
       '</div></div>';
@@ -1098,6 +1152,7 @@
       st.shipDays = Array.prototype.filter.call(f.querySelectorAll('[name=shipDay]'), function (c) { return c.checked; }).map(function (c) { return +c.value; });
       st.cutoffTime = el.cutoffTime.value || '20:00'; st.cutoffDaysBefore = n(el.cutoffDaysBefore.value);
       st.shipTime = el.shipTime.value || '12:00'; st.launchDate = el.launchDate.value; st.activeShipOverride = el.activeShipOverride.value;
+      st.singlePack = { cost: n(el.spCost.value), size: Math.max(1, n(el.spSize.value) || 1) };
       st.salesAccount = el.salesAccount.value; st.countUnpaid = el.countUnpaid.checked; st.autoRecordPayments = el.autoRecordPayments.checked;
       st.accounts.forEach(function (a, i) { a.opening = n(el['opening_' + i].value); });
       ['team', 'channels', 'deliveryMethods'].forEach(function (k) { st[k] = el[k].value.split(',').map(function (s) { return s.trim(); }).filter(Boolean); });
@@ -1210,5 +1265,6 @@
   // Keep the countdown fresh.
   setInterval(function () { if (route() === 'dashboard' && !modal.open) render(); }, 60000);
   applyTheme();
+  if (MIGRATED) { save(); setTimeout(function () { toast('Menu and inventory updated to madeleines, cookies and giftsets'); }, 400); }
   render();
 })();
